@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+  <head>
+    <title>Grammatik för visualiseringar</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Filip Wästberg" />
+    <link href="libs/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="libs/remark-css-0.0.1/default-fonts.css" rel="stylesheet" />
+    <script src="libs/htmlwidgets-1.3/htmlwidgets.js"></script>
+    <script src="libs/plotly-binding-4.9.0/plotly.js"></script>
+    <script src="libs/typedarray-0.1/typedarray.min.js"></script>
+    <script src="libs/jquery-1.11.3/jquery.min.js"></script>
+    <link href="libs/crosstalk-1.0.0/css/crosstalk.css" rel="stylesheet" />
+    <script src="libs/crosstalk-1.0.0/js/crosstalk.min.js"></script>
+    <link href="libs/plotly-htmlwidgets-css-1.46.1/plotly-htmlwidgets.css" rel="stylesheet" />
+    <script src="libs/plotly-main-1.46.1/plotly-latest.min.js"></script>
+    <script src="libs/d3-5.7.0/d3.min.js"></script>
+    <script src="libs/d3-lasso-0.0.5/d3-lasso.min.js"></script>
+    <link href="libs/ggiraphjs-0.2.0/styles.css" rel="stylesheet" />
+    <script src="libs/ggiraphjs-0.2.0/ggiraphjs.min.js"></script>
+    <script src="libs/girafe-binding-0.7.0/girafe.js"></script>
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Grammatik för visualiseringar
+## ⚔<br/>i R
+### Filip Wästberg
+### 2019/03/15
+
+---
+
+
+
+
+## Varför ska vi bry oss om datavisualisering?
+
+Anscombe data-set
+
+
+```
+##    observation set  x    y
+## 1            1   I 10 8.04
+## 2            1  II 10 9.14
+## 3            1 III 10 7.46
+## 4            1  IV  8 6.58
+## 5            2   I  8 6.95
+## 6            2  II  8 8.14
+## 7            2 III  8 6.77
+## 8            2  IV  8 5.76
+## 9            3   I 13 7.58
+## 10           3  II 13 8.74
+```
+
+---
+
+## Vad är det första vi gör?
+
+
+```
+## # A tibble: 4 x 5
+##   set   x_mean y_mean  x_sd  y_sd
+##   &lt;chr&gt;  &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+## 1 I          9   7.50  3.32  2.03
+## 2 II         9   7.50  3.32  2.03
+## 3 III        9   7.5   3.32  2.03
+## 4 IV         9   7.50  3.32  2.03
+```
+
+---
+
+
+```r
+anscombe_tidy %&gt;% 
+  nest(observation, x, y) %&gt;% 
+  mutate(model = map(data, ~lm(y ~ x, data = .x)),
+         tidy = map(model, broom::tidy)) %&gt;% 
+  unnest(tidy) %&gt;% 
+  filter(term == "x") %&gt;% 
+  select(set, estimate, std.error, statistic)
+```
+
+```
+## # A tibble: 4 x 4
+##   set   estimate std.error statistic
+##   &lt;chr&gt;    &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;
+## 1 I        0.500     0.118      4.24
+## 2 II       0.5       0.118      4.24
+## 3 III      0.500     0.118      4.24
+## 4 IV       0.500     0.118      4.24
+```
+
+---
+
+Men...
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-2-1.png)&lt;!-- --&gt;
+
+---
+
+
+```r
+library(gapminder)
+library(ggplot2)
+library(gganimate)
+
+p &lt;- ggplot(gapminder, aes(gdpPercap, lifeExp, size = pop, colour = continent)) +
+  geom_point(alpha = 0.7) +
+  #scale_colour_manual(values = country_colors) +
+  scale_size(range = c(2, 12)) +
+  scale_x_log10() +
+  #facet_wrap(~continent) +
+  guides(color= guide_legend(), size=FALSE) +
+  theme_light()
+# +
+  #labs(title = 'Year: {frame_time}', x = 'GDP per capita', y = 'life expectancy') +
+  #transition_time(year) +
+  #ease_aes('linear')
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-4-1.png)&lt;!-- --&gt;
+
+```r
+#animate(p, 100, 10)
+```
+
+---
+
+# Vad behöver vi för att göra en visualisering?
+
+- En fråga: ex. Hur påverkar ekonomisk utveckling den förväntande livslängden i ett land?
+
+--
+
+- Skiljer sig det här eventuella sambandet mellan kontinenter? Mellan länder?
+
+--
+
+- Skiljer det sig över tid? 
+
+---
+
+# För att svara på frågan behöver vi:
+
+1. Data
+
+
+```r
+head(gapminder)
+```
+
+```
+## # A tibble: 6 x 6
+##   country     continent  year lifeExp      pop gdpPercap
+##   &lt;fct&gt;       &lt;fct&gt;     &lt;int&gt;   &lt;dbl&gt;    &lt;int&gt;     &lt;dbl&gt;
+## 1 Afghanistan Asia       1952    28.8  8425333      779.
+## 2 Afghanistan Asia       1957    30.3  9240934      821.
+## 3 Afghanistan Asia       1962    32.0 10267083      853.
+## 4 Afghanistan Asia       1967    34.0 11537966      836.
+## 5 Afghanistan Asia       1972    36.1 13079460      740.
+## 6 Afghanistan Asia       1977    38.4 14880372      786.
+```
+
+---
+
+
+```r
+data &lt;- gapminder %&gt;%
+  filter(year == 1972)
+
+ggplot(data)
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-6-1.png)&lt;!-- --&gt;
+
+---
+
+2. aestsetics
+
+- Vi behöver `mappa` data till visualiseringen. Vi mappar data till `aestethics` i visualiseringen. En `aestetic` kan vara exempelvis `x`-axeln eller `y`-axeln.
+
+- För att svara på vår fråga kan vi exempelvis mappa `gdpPercap` till `x`-axeln och `lifeExp` till `y`-axeln
+
+---
+
+
+```r
+ggplot(data = data, mapping = aes(x = gdpPercap, y = lifeExp))
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-7-1.png)&lt;!-- --&gt;
+
+---
+
+3. Geometriska objekt
+
+Vi behöver geometrisk object som representerar data, exempelvis punkter eller staplar.
+
+I ggplot2 kallas dessa för `geoms`, exempelvis:
+
+---
+
+
+```r
+ggplot(data = data, mapping = aes(x = gdpPercap, y = lifeExp)) +
+  geom_point()
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-8-1.png)&lt;!-- --&gt;
+
+---
+
+Mer `aestetics`
+
+
+```r
+p &lt;- ggplot(data = data,
+       mapping = aes(x = gdpPercap,
+                     y = lifeExp,
+                     color = continent)) + ##
+  geom_point()
+```
+
+---
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-10-1.png)&lt;!-- --&gt;
+
+---
+
+Och ännu mer `aestetics`
+
+
+```r
+p &lt;- ggplot(data = data,
+       mapping = aes(x = gdpPercap,
+                     y = lifeExp,
+                     color = continent,
+                     size = pop)) + ##
+  geom_point()
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-12-1.png)&lt;!-- --&gt;
+
+---
+
+4. Skala - Vilken skala ska grafen visas på?
+
+
+```r
+p &lt;- ggplot(data = data, mapping = aes(x = gdpPercap, y = lifeExp,
+                                  size = pop, color = continent)) +
+  geom_point() +
+  scale_y_continuous() +
+  scale_x_continuous()
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-14-1.png)&lt;!-- --&gt;
+
+---
+
+gdp per capita är skevt fördelad.
+
+
+```r
+ggplot(data, aes(x = gdpPercap)) +
+  geom_density()
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-15-1.png)&lt;!-- --&gt;
+
+---
+
+Genom att ta logaritmen kan vi justera för den skeva fördelningen.
+
+
+```r
+ggplot(data, aes(x = gdpPercap)) +
+  geom_density() +
+  scale_x_log10()
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-16-1.png)&lt;!-- --&gt;
+
+---
+
+
+```r
+p &lt;- ggplot(data = data, mapping = aes(x = gdpPercap,
+                                  y = lifeExp,
+                                  size = pop,
+                                  color = continent)) +
+  geom_point() +
+  scale_x_log10()
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-18-1.png)&lt;!-- --&gt;
+
+---
+
+Vad mer har vi för grammatiska element?
+
+5. Statistiska beräkningar
+
+
+```r
+p &lt;- ggplot(data = data, mapping = aes(x = gdpPercap,
+                                  y = lifeExp,
+                                  size = pop,
+                                  color = continent)) +
+  geom_point() +
+  scale_x_log10() +
+  stat_smooth(method = "lm")
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-20-1.png)&lt;!-- --&gt;
+
+---
+
+
+```r
+p &lt;- ggplot(data = data, mapping = aes(x = gdpPercap,
+                                  y = lifeExp,
+                                  size = pop,
+                                  color = continent)) +
+  geom_point() +
+  scale_x_log10() +
+  stat_smooth(method = "lm", formula = y ~ 1)
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-22-1.png)&lt;!-- --&gt;
+
+---
+
+- Nu beräknas statistik per grupp. Det är eftersom att vi specificerat i vår `aes()` i `ggplot()`. 
+
+- Vi kan flytta `aes()` till våra geometriska objekt om vi vill beräkna statistik för hela gruppen.
+
+--
+
+
+```r
+p &lt;- ggplot(data = data, mapping = aes(x = gdpPercap, y = lifeExp)) +
+  geom_point(aes(size = pop, color = continent)) +
+  scale_x_log10() +
+  stat_smooth(method = "lm")
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-24-1.png)&lt;!-- --&gt;
+
+---
+
+6. Facets - vill vi visa grupper som flera visualiseringar?
+
+
+```r
+p &lt;- ggplot(data = data, mapping = aes(x = gdpPercap,
+                                  y = lifeExp,
+                                  size = pop,
+                                  color = continent)) +
+  geom_point() +
+  scale_x_log10() +
+  stat_smooth(method = "lm") +
+  facet_wrap(~continent)
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-26-1.png)&lt;!-- --&gt;
+
+
+---
+
+Vi kan specificera skalor för varje subplot
+
+
+```r
+p &lt;- ggplot(data = data, mapping = aes(x = gdpPercap,
+                                  y = lifeExp,
+                                  size = pop,
+                                  color = continent)) +
+  geom_point() +
+  scale_x_log10() +
+  stat_smooth(method = "lm") +
+  facet_wrap(~continent, scales = "free")
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-28-1.png)&lt;!-- --&gt;
+
+---
+
+7. Koordinat-system
+
+- Cartesian eller Polar
+- Polar för exempelvis cirkeldiagram
+
+---
+
+Grammatik för visualisering:
+
+1. Data
+2. Aestetics
+3. Geometrical objects
+4. Scales
+5. Statistics
+6. Facets
+7. Coordinate system
+
+Alla dessa kan manipuleras
+
+---
+
+Exempel från BBC
+
+![](bbc-examples.png)
+
+---
+
+Georgios Karamanis , @GeorgiosKaramanis på Twitter
+
+![](ufos.jpg)
+
+---
+
+![](themeparkage.jpg)
+
+---
+
+![](squirrls.jpg)
+
+---
+
+![](kreuzberg.jpg)
+
+---
+
+Nu ska vi praktisera den här grammatiken!
+
+Vi utgår från data som kommer från Hemnet!
+
+
+```r
+library(janitor)
+hem &lt;- read_csv("hemnet/FilteredApData.csv") %&gt;% 
+  clean_names() %&gt;% 
+  mutate(date = as.Date(as.character(date), format = "%Y%m%d"))
+
+hem
+```
+
+```
+## # A tibble: 14,171 x 11
+##    date       adress  size rooms broker  rent  price nearby_po_is latitude
+##    &lt;date&gt;     &lt;chr&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;  &lt;dbl&gt;  &lt;dbl&gt;        &lt;dbl&gt;    &lt;dbl&gt;
+##  1 2019-12-06 Karls…  25       1 Svens…  1198 2.70e6          523     59.3
+##  2 2019-12-06 Slipg…  25       1 BOSTH…  1521 2.82e6          378     59.3
+##  3 2019-12-05 Flemi…  22.2     1 Bosta…   884 2.66e6          732     59.3
+##  4 2019-12-05 Arvid…  24       1 Svens…  1614 1.61e6           31     59.3
+##  5 2019-12-04 Vitta…  23       1 Husma…  1631 1.45e6           35     59.4
+##  6 2019-12-04 Syssl…  24       1 Mäkla…  1230 2.58e6          470     59.3
+##  7 2019-12-04 Högal…  23.5     1 BOSTH…  1243 2.80e6          462     59.3
+##  8 2019-12-03 Nypon…  22       1 Fasti…  1051 2.35e6          134     59.3
+##  9 2019-12-03 Sickl…  25       1 ERA E…  1602 2.12e6           22     59.3
+## 10 2019-12-03 Maria…  25       1 BOSTH…  1205 2.76e6         1300     59.3
+## # … with 14,161 more rows, and 2 more variables: longitude &lt;dbl&gt;,
+## #   price_per_kvm &lt;dbl&gt;
+```
+
+---
+
+2. Visualisera relationen mellan `inflyttningar` och `utflyttningar`.
+- Vad är dina `aestetics`?
+- Vilken `geom_` använder du?
+- Passar skalan?
+- Finns det någon passande statistic för att visuellt beskriva relationen?
+
+
+```r
+ggplot(data, aes(x = x, y = y)) +
+  geom_... +
+  stat_...
+```
+
+---
+
+
+```r
+ggplot(hem, aes(x = size, y = price)) +
+  geom_point() +
+  stat_smooth()
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-31-1.png)&lt;!-- --&gt;
+
+---
+
+## Vi kan addera titlar och data-etiketter med `labs()` 
+
+
+```r
+p &lt;- ggplot(mtcars, aes(mpg, hp)) +
+  geom_point() +
+  labs(title = "Min titel",
+       x = "Min x-axel",
+       y = "Min y-axel", 
+       subtitle = "Min subtitle",
+       caption = "Källa: Min caption")
+```
+---
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-33-1.png)&lt;!-- --&gt;
+
+---
+
+## Vi kan ändra tema med `theme_...`
+
+
+```r
+p &lt;- ggplot(mtcars, aes(mpg, hp)) +
+  geom_point() +
+  labs(title = "Min titel",
+       x = "Min x-axel",
+       y = "Min y-axel", 
+       subtitle = "Min subtitle",
+       caption = "Källa: Min caption") +
+  theme_minimal()
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-35-1.png)&lt;!-- --&gt;
+
+---
+
+## Övning
+
+- Addera de labels du vill ha, gör dem informativa 
+- Addera ett tema 
+
+
+```r
+p &lt;- ggplot(mtcars, aes(mpg, hp)) +
+  geom_point() +
+  labs(title = "Min titel",
+       x = "Min x-axel",
+       y = "Min y-axel", 
+       subtitle = "Min subtitle",
+       caption = "Källa: Min caption") +
+  theme_minimal()
+```
+
+---
+
+## Andra aestetics 
+
+- Utgå från din visualisering av relationen mellan utflyttning och inflyttningar
+- Mappa vår aestetic `color` till en numerisk variabler, exempelvis befolkning.
+
+---
+
+
+```r
+ggplot(hem, aes(x = size, 
+                y = price,
+                color = ...)) +
+  geom_point() +
+  stat_smooth()
+```
+
+---
+
+
+```r
+p &lt;- ggplot(hem, aes(x = size, 
+                y = price,
+                color = rent)) +
+  geom_point() +
+  stat_smooth()
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-39-1.png)&lt;!-- --&gt;
+
+---
+
+## Diskreta variabler
+
+- Utgå från din visualisering av relationen mellan utflyttning och inflyttningar
+- Mappa vår aestetic `color` till en kategorisk variabel, testa `rooms`, men glöm inte att göra den kategorisk med `as.factor()`
+
+
+```r
+p &lt;- ggplot(hem, aes(x = size, 
+                y = price,
+                color = as.factor(...))) +
+  geom_point() +
+  stat_smooth()
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-42-1.png)&lt;!-- --&gt;
+
+---
+
+## Fler aestetics 
+
+- Utgå från din visualisering av relationen mellan utflyttning och inflyttningar
+- Förutom en mappning av color, mappa `size` till en numerisk variabel
+
+---
+
+
+```r
+p &lt;- ggplot(hem, aes(x = size, 
+                y = price,
+                color = as.factor(rooms),
+            size = rent)) +
+  geom_point(alpha = .5) +
+  stat_smooth()
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-44-1.png)&lt;!-- --&gt;
+
+
+---
+
+## Fördelningar 
+
+- Visualisera fördelningar.
+
+---
+
+
+```r
+ggplot(gapminder, aes(x = gdpPercap)) +
+  geom_density()
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-45-1.png)&lt;!-- --&gt;
+
+---
+
+
+```r
+ggplot(gapminder, aes(x = gdpPercap)) +
+  geom_histogram()
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-46-1.png)&lt;!-- --&gt;
+
+---
+
+Visualisera fördelning per kategori
+
+
+```r
+ggplot(gapminder, aes(x = continent, y = gdpPercap)) +
+  geom_boxplot()
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-47-1.png)&lt;!-- --&gt;
+
+---
+
+
+```r
+ggplot(gapminder, aes(x = continent, y = gdpPercap)) +
+  geom_violin()
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-48-1.png)&lt;!-- --&gt;
+
+---
+
+## Skalor och fördelningar 
+
+
+```r
+ggplot(gapminder, aes(x = gdpPercap)) +
+  geom_histogram() +
+  scale_x_log10()
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-49-1.png)&lt;!-- --&gt;
+
+---
+
+## Övning: Visualisera försäljningspris 
+
+- Vilken geom använder du och varför?
+- Vilken skala använder du?
+
+---
+
+
+```r
+p &lt;- ggplot(hem, aes(price)) +
+  geom_histogram() +
+  scale_x_log10()
+```
+
+---
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-51-1.png)&lt;!-- --&gt;
+
+---
+
+## Facets 
+
+- Skapa subplots för antal rum 
+
+
+```r
+ggplot(hem, aes(price)) +
+  geom_histogram() +
+  scale_x_log10() +
+  facet_wrap(~...)
+```
+
+---
+
+
+```r
+p &lt;- ggplot(hem, aes(price)) +
+  geom_histogram() +
+  scale_x_log10() +
+  facet_wrap(~rooms, scales = "free")
+```
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-54-1.png)&lt;!-- --&gt;
+
+---
+
+## Barcharts på aggregerade tabeller
+
+Inte sällan har vi aggregerade tabeller som vi vill visualisera.
+
+
+```r
+gapminder &lt;- gapminder::gapminder 
+
+gap_continent &lt;- gapminder %&gt;% 
+  group_by(continent) %&gt;% 
+  summarise(mean_gdp_per_cap = mean(gdpPercap))
+
+gap_continent
+```
+
+```
+## # A tibble: 5 x 2
+##   continent mean_gdp_per_cap
+##   &lt;fct&gt;                &lt;dbl&gt;
+## 1 Africa               2194.
+## 2 Americas             7136.
+## 3 Asia                 7902.
+## 4 Europe              14469.
+## 5 Oceania             18622.
+```
+
+---
+
+## geom_col()
+
+- `geom_bar()` används när vi vill veta antalet rader per kategori
+- `geom_col()` används på färdiga tabeller
+- Sorterar efter bokstavsordning på kategorier
+
+---
+
+
+```r
+gap_continent %&gt;% 
+  ggplot(aes(x = continent, y = mean_gdp_per_cap)) +
+  geom_col()
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-56-1.png)&lt;!-- --&gt;
+
+---
+
+Ibland har vi många kategorier, ofta är en enkel lösning att vända på koordinaterna med `coord_flip()`
+
+
+```r
+p &lt;- gap_continent %&gt;% 
+  ggplot(aes(x = continent, y = mean_gdp_per_cap)) +
+  geom_col() +
+  coord_flip()
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-58-1.png)&lt;!-- --&gt;
+
+---
+
+## Hur fördelar sig kvadratmeterpris per mäklare? 
+
+- Ta fram en aggregerad tabell med genomsnittligt kvadratmeterpris per mäklare, ta endast fram för de 20 vanligaste mäklarna.
+
+- Vilken funktion använder du för att kalkylera genomsnitt? Ha fördelningen i åtanke
+
+- Visualisera med `geom_col()`
+
+---
+
+
+```r
+tbl_broker &lt;- hem %&gt;% 
+  group_by(broker) %&gt;% 
+  summarise(median_kvm_price = median(price_per_kvm), n = n()) %&gt;% 
+  arrange(-n) %&gt;% 
+  top_n(20)
+
+p &lt;- ggplot(tbl_broker, 
+            aes(broker,
+                median_kvm_price)) +
+  geom_col() +
+  coord_flip()
+```
+
+---
+
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-60-1.png)&lt;!-- --&gt;
+
+---
+
+## Sortera X-axeln 
+
+- Ofta vill vi sortera X-axeln efter ett värde, exempelvis 
+- Då kan vi bara använda `reorder(x, X = sum)`
+
+
+```r
+p &lt;- gap_continent %&gt;% 
+  ggplot(aes(x = reorder(continent, mean_gdp_per_cap), y = mean_gdp_per_cap)) +
+  geom_col() +
+  coord_flip()
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-62-1.png)&lt;!-- --&gt;
+
+---
+
+## Sortera din bar-chart efter medianpris
+
+---
+
+```r
+p &lt;- ggplot(tbl_broker, 
+            aes(reorder(broker, median_kvm_price),
+                median_kvm_price)) +
+  geom_col() +
+  coord_flip()
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-64-1.png)&lt;!-- --&gt;
+
+---
+
+## Använd `dplyr` och `ggplot2` ihop
+
+
+```r
+p &lt;- gapminder %&gt;% 
+  group_by(year, continent) %&gt;% 
+  summarise(median_gdp_per_cap = median(gdpPercap)) %&gt;% 
+  ggplot(aes(year, median_gdp_per_cap, color = continent)) +
+  geom_line()
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-66-1.png)&lt;!-- --&gt;
+
+---
+
+## Tidsserier 
+
+Vi har någon form av tidsserie som vi vill visualisera. Oftast har vi då en tidskomponent, exempelvis dag eller månad. I vår hem-data har vi datum.. 
+
+- Kalkylera genomsnittligt försäljningspris per dag och visualisera
+- Vilken geom använder du?
+- Vilken skala använder du?
+
+---
+
+
+```r
+ p &lt;- hem %&gt;% 
+  group_by(date) %&gt;% 
+  summarise(median_price = median(price_per_kvm), n = n()) %&gt;% 
+  ggplot(aes(date, y = median_price)) +
+  geom_point()
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-68-1.png)&lt;!-- --&gt;
+
+---
+
+## Mer stabila tidsserier
+
+- Inte sällan vill vi ha lite mindre granulära tidsserier, exempelvis per vecka eller månad
+
+--
+
+- Vi kan då använda antigen `lubridate` för att få fram exempelvis `vecka` och `år` 
+
+--
+
+- Eller `tsibble` för att få fram `yearweek` eller `yearmonth`.
+
+--
+
+- Ladda `tsibble` och `lubridate` 
+
+--
+
+- Skapa en kolumn som representera vecka
+
+--
+
+- En som representerar år
+
+--
+
+- En som representerar år-vecka med `tsibble::yearweek()`
+
+--
+
+- Visualisera per år-vecka
+
+--
+
+- Visualisera per vecka och sätt `color = år`
+
+---
+
+
+
+---
+
+
+```r
+library(lubridate)
+library(tsibble)
+
+weekly_sales &lt;- hem %&gt;% 
+  mutate(
+    year = as.factor(year(date)),
+    week = week(date),
+    yearweek = yearweek(date)
+  )
+
+p &lt;- weekly_sales %&gt;% 
+  group_by(yearweek) %&gt;% 
+  summarise(median_price = median(price)) %&gt;% 
+  ggplot(aes(yearweek, median_price)) +
+  geom_point() 
+```
+
+---
+
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-70-1.png)&lt;!-- --&gt;
+---
+
+
+```r
+p &lt;- weekly_sales %&gt;% 
+  group_by(year, week) %&gt;% 
+  summarise(median_price = median(price)) %&gt;% 
+  ggplot(aes(week, median_price, color = year)) +
+  geom_line() 
+```
+
+---
+
+```r
+p
+```
+
+![](r-visualisering-pres_files/figure-html/unnamed-chunk-72-1.png)&lt;!-- --&gt;
+
+
+---
+
+
+```r
+weekly_sales %&gt;% 
+  group_by(year) %&gt;% 
+  count()
+```
+
+```
+## # A tibble: 6 x 2
+## # Groups:   year [6]
+##   year      n
+##   &lt;fct&gt; &lt;int&gt;
+## 1 2014     85
+## 2 2015    331
+## 3 2016    692
+## 4 2017   1610
+## 5 2018   3240
+## 6 2019   8213
+```
+
+
+---
+
+## Interaktivitet
+
+Med paketet `plotly` kan du ta ett `ggplot2`-objekt och göra om det till en interaktiv graf, som kräver en hemsida.
+
+---
+
+```r
+library(plotly)
+ggplotly(p)
+```
+
+<div id="htmlwidget-8be18bef90160b573468" style="width:100%;height:100%;" class="plotly html-widget"></div>
+<script type="application/json" data-for="htmlwidget-8be18bef90160b573468">{"x":{"data":[{"x":[16,17,19,20,21,22,23,25,26,27,33,34,35,36,37,38,39,40,41,43,44,45,46,47,48,49,50],"y":[10200000,6625000,7200000,5250000,6805000,7140000,4985000,7100000,7900000,5650000,6835000,4400000,7875000,5445000,10000000,7400000,5275000,3500000,8200000,4712500,4380000,7000000,6050000,5500000,8450000,1900000,9710000],"text":["week: 16<br />median_price: 10200000<br />year: 2014","week: 17<br />median_price:  6625000<br />year: 2014","week: 19<br />median_price:  7200000<br />year: 2014","week: 20<br />median_price:  5250000<br />year: 2014","week: 21<br />median_price:  6805000<br />year: 2014","week: 22<br />median_price:  7140000<br />year: 2014","week: 23<br />median_price:  4985000<br />year: 2014","week: 25<br />median_price:  7100000<br />year: 2014","week: 26<br />median_price:  7900000<br />year: 2014","week: 27<br />median_price:  5650000<br />year: 2014","week: 33<br />median_price:  6835000<br />year: 2014","week: 34<br />median_price:  4400000<br />year: 2014","week: 35<br />median_price:  7875000<br />year: 2014","week: 36<br />median_price:  5445000<br />year: 2014","week: 37<br />median_price: 10000000<br />year: 2014","week: 38<br />median_price:  7400000<br />year: 2014","week: 39<br />median_price:  5275000<br />year: 2014","week: 40<br />median_price:  3500000<br />year: 2014","week: 41<br />median_price:  8200000<br />year: 2014","week: 43<br />median_price:  4712500<br />year: 2014","week: 44<br />median_price:  4380000<br />year: 2014","week: 45<br />median_price:  7000000<br />year: 2014","week: 46<br />median_price:  6050000<br />year: 2014","week: 47<br />median_price:  5500000<br />year: 2014","week: 48<br />median_price:  8450000<br />year: 2014","week: 49<br />median_price:  1900000<br />year: 2014","week: 50<br />median_price:  9710000<br />year: 2014"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(248,118,109,1)","dash":"solid"},"hoveron":"points","name":"2014","legendgroup":"2014","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":[2,4,5,6,7,8,9,10,11,12,13,15,16,17,18,19,20,21,22,23,24,25,26,28,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51],"y":[8400000,7700000,3990000,6100000,3250000,8650000,6900000,5160000,5950000,7225000,7750000,5175000,7500000,4710000,6750000,6717500,9350000,5300000,6437500,5550000,8465000,8400000,8950000,7500000,2510000,2447500,2600000,2450000,2735000,2600000,2800000,2755000,2500000,2650000,2520000,2560000,2750000,2585000,2430000,2412500,2560000,2405000,2590000,2940000],"text":["week:  2<br />median_price:  8400000<br />year: 2015","week:  4<br />median_price:  7700000<br />year: 2015","week:  5<br />median_price:  3990000<br />year: 2015","week:  6<br />median_price:  6100000<br />year: 2015","week:  7<br />median_price:  3250000<br />year: 2015","week:  8<br />median_price:  8650000<br />year: 2015","week:  9<br />median_price:  6900000<br />year: 2015","week: 10<br />median_price:  5160000<br />year: 2015","week: 11<br />median_price:  5950000<br />year: 2015","week: 12<br />median_price:  7225000<br />year: 2015","week: 13<br />median_price:  7750000<br />year: 2015","week: 15<br />median_price:  5175000<br />year: 2015","week: 16<br />median_price:  7500000<br />year: 2015","week: 17<br />median_price:  4710000<br />year: 2015","week: 18<br />median_price:  6750000<br />year: 2015","week: 19<br />median_price:  6717500<br />year: 2015","week: 20<br />median_price:  9350000<br />year: 2015","week: 21<br />median_price:  5300000<br />year: 2015","week: 22<br />median_price:  6437500<br />year: 2015","week: 23<br />median_price:  5550000<br />year: 2015","week: 24<br />median_price:  8465000<br />year: 2015","week: 25<br />median_price:  8400000<br />year: 2015","week: 26<br />median_price:  8950000<br />year: 2015","week: 28<br />median_price:  7500000<br />year: 2015","week: 32<br />median_price:  2510000<br />year: 2015","week: 33<br />median_price:  2447500<br />year: 2015","week: 34<br />median_price:  2600000<br />year: 2015","week: 35<br />median_price:  2450000<br />year: 2015","week: 36<br />median_price:  2735000<br />year: 2015","week: 37<br />median_price:  2600000<br />year: 2015","week: 38<br />median_price:  2800000<br />year: 2015","week: 39<br />median_price:  2755000<br />year: 2015","week: 40<br />median_price:  2500000<br />year: 2015","week: 41<br />median_price:  2650000<br />year: 2015","week: 42<br />median_price:  2520000<br />year: 2015","week: 43<br />median_price:  2560000<br />year: 2015","week: 44<br />median_price:  2750000<br />year: 2015","week: 45<br />median_price:  2585000<br />year: 2015","week: 46<br />median_price:  2430000<br />year: 2015","week: 47<br />median_price:  2412500<br />year: 2015","week: 48<br />median_price:  2560000<br />year: 2015","week: 49<br />median_price:  2405000<br />year: 2015","week: 50<br />median_price:  2590000<br />year: 2015","week: 51<br />median_price:  2940000<br />year: 2015"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(183,159,0,1)","dash":"solid"},"hoveron":"points","name":"2015","legendgroup":"2015","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51],"y":[2525000,2515000,2625000,2550000,2950000,2660000,2450000,2600000,2700000,3017500,2675000,2720000,2500000,2550000,2500000,2562500,2600000,2640000,2580000,2560000,2450000,2550000,2625000,2350000,2550000,2750000,3160000,2600000,2700000,2620000,2660000,2410000,2637500,2650000,2710000,3000000,2800000,2725000,2560000,2710000,2735000,2750000,2810000,2800000,2982500,2900000,2855000,2830000,2800000,2972500,3200000],"text":["week:  1<br />median_price:  2525000<br />year: 2016","week:  2<br />median_price:  2515000<br />year: 2016","week:  3<br />median_price:  2625000<br />year: 2016","week:  4<br />median_price:  2550000<br />year: 2016","week:  5<br />median_price:  2950000<br />year: 2016","week:  6<br />median_price:  2660000<br />year: 2016","week:  7<br />median_price:  2450000<br />year: 2016","week:  8<br />median_price:  2600000<br />year: 2016","week:  9<br />median_price:  2700000<br />year: 2016","week: 10<br />median_price:  3017500<br />year: 2016","week: 11<br />median_price:  2675000<br />year: 2016","week: 12<br />median_price:  2720000<br />year: 2016","week: 13<br />median_price:  2500000<br />year: 2016","week: 14<br />median_price:  2550000<br />year: 2016","week: 15<br />median_price:  2500000<br />year: 2016","week: 16<br />median_price:  2562500<br />year: 2016","week: 17<br />median_price:  2600000<br />year: 2016","week: 18<br />median_price:  2640000<br />year: 2016","week: 19<br />median_price:  2580000<br />year: 2016","week: 20<br />median_price:  2560000<br />year: 2016","week: 21<br />median_price:  2450000<br />year: 2016","week: 22<br />median_price:  2550000<br />year: 2016","week: 23<br />median_price:  2625000<br />year: 2016","week: 24<br />median_price:  2350000<br />year: 2016","week: 25<br />median_price:  2550000<br />year: 2016","week: 26<br />median_price:  2750000<br />year: 2016","week: 27<br />median_price:  3160000<br />year: 2016","week: 28<br />median_price:  2600000<br />year: 2016","week: 29<br />median_price:  2700000<br />year: 2016","week: 30<br />median_price:  2620000<br />year: 2016","week: 31<br />median_price:  2660000<br />year: 2016","week: 32<br />median_price:  2410000<br />year: 2016","week: 33<br />median_price:  2637500<br />year: 2016","week: 34<br />median_price:  2650000<br />year: 2016","week: 35<br />median_price:  2710000<br />year: 2016","week: 36<br />median_price:  3000000<br />year: 2016","week: 37<br />median_price:  2800000<br />year: 2016","week: 38<br />median_price:  2725000<br />year: 2016","week: 39<br />median_price:  2560000<br />year: 2016","week: 40<br />median_price:  2710000<br />year: 2016","week: 41<br />median_price:  2735000<br />year: 2016","week: 42<br />median_price:  2750000<br />year: 2016","week: 43<br />median_price:  2810000<br />year: 2016","week: 44<br />median_price:  2800000<br />year: 2016","week: 45<br />median_price:  2982500<br />year: 2016","week: 46<br />median_price:  2900000<br />year: 2016","week: 47<br />median_price:  2855000<br />year: 2016","week: 48<br />median_price:  2830000<br />year: 2016","week: 49<br />median_price:  2800000<br />year: 2016","week: 50<br />median_price:  2972500<br />year: 2016","week: 51<br />median_price:  3200000<br />year: 2016"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(0,186,56,1)","dash":"solid"},"hoveron":"points","name":"2016","legendgroup":"2016","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52],"y":[2965000,2712500,2930000,2765000,2960000,2855000,2732500,3077500,2830000,2885000,2855000,2720000,2865000,2900000,2875000,2900000,2730000,2760000,2762500,2940000,2775000,2865000,3000000,2905000,2975000,2600000,2900000,3150000,2910000,2920000,2850000,2920000,2855000,2787500,2692500,2785000,2850000,2735000,2877500,2800000,2850000,2720000,2830000,2610000,2620000,2750000,2700000,2700000,2630000,2575000,2580000,1722500],"text":["week:  1<br />median_price:  2965000<br />year: 2017","week:  2<br />median_price:  2712500<br />year: 2017","week:  3<br />median_price:  2930000<br />year: 2017","week:  4<br />median_price:  2765000<br />year: 2017","week:  5<br />median_price:  2960000<br />year: 2017","week:  6<br />median_price:  2855000<br />year: 2017","week:  7<br />median_price:  2732500<br />year: 2017","week:  8<br />median_price:  3077500<br />year: 2017","week:  9<br />median_price:  2830000<br />year: 2017","week: 10<br />median_price:  2885000<br />year: 2017","week: 11<br />median_price:  2855000<br />year: 2017","week: 12<br />median_price:  2720000<br />year: 2017","week: 13<br />median_price:  2865000<br />year: 2017","week: 14<br />median_price:  2900000<br />year: 2017","week: 15<br />median_price:  2875000<br />year: 2017","week: 16<br />median_price:  2900000<br />year: 2017","week: 17<br />median_price:  2730000<br />year: 2017","week: 18<br />median_price:  2760000<br />year: 2017","week: 19<br />median_price:  2762500<br />year: 2017","week: 20<br />median_price:  2940000<br />year: 2017","week: 21<br />median_price:  2775000<br />year: 2017","week: 22<br />median_price:  2865000<br />year: 2017","week: 23<br />median_price:  3000000<br />year: 2017","week: 24<br />median_price:  2905000<br />year: 2017","week: 25<br />median_price:  2975000<br />year: 2017","week: 26<br />median_price:  2600000<br />year: 2017","week: 27<br />median_price:  2900000<br />year: 2017","week: 28<br />median_price:  3150000<br />year: 2017","week: 29<br />median_price:  2910000<br />year: 2017","week: 30<br />median_price:  2920000<br />year: 2017","week: 31<br />median_price:  2850000<br />year: 2017","week: 32<br />median_price:  2920000<br />year: 2017","week: 33<br />median_price:  2855000<br />year: 2017","week: 34<br />median_price:  2787500<br />year: 2017","week: 35<br />median_price:  2692500<br />year: 2017","week: 36<br />median_price:  2785000<br />year: 2017","week: 37<br />median_price:  2850000<br />year: 2017","week: 38<br />median_price:  2735000<br />year: 2017","week: 39<br />median_price:  2877500<br />year: 2017","week: 40<br />median_price:  2800000<br />year: 2017","week: 41<br />median_price:  2850000<br />year: 2017","week: 42<br />median_price:  2720000<br />year: 2017","week: 43<br />median_price:  2830000<br />year: 2017","week: 44<br />median_price:  2610000<br />year: 2017","week: 45<br />median_price:  2620000<br />year: 2017","week: 46<br />median_price:  2750000<br />year: 2017","week: 47<br />median_price:  2700000<br />year: 2017","week: 48<br />median_price:  2700000<br />year: 2017","week: 49<br />median_price:  2630000<br />year: 2017","week: 50<br />median_price:  2575000<br />year: 2017","week: 51<br />median_price:  2580000<br />year: 2017","week: 52<br />median_price:  1722500<br />year: 2017"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(0,191,196,1)","dash":"solid"},"hoveron":"points","name":"2017","legendgroup":"2017","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52],"y":[2075000,2600000,2525000,2650000,2600000,2687500,2775000,2725000,2560000,2750000,2750000,2767500,2537500,2897500,2800000,2740000,2765000,2850000,2800000,2900000,2747500,2960000,2900000,2837500,3075000,2992500,3055000,2920000,2750000,2750000,2855000,2800000,2950000,3220000,3000000,3000000,2900000,2905000,3000000,2850000,3050000,2950000,3050000,2875000,2875000,2900000,2947500,2830000,2805000,2750000,2975000,3165000],"text":["week:  1<br />median_price:  2075000<br />year: 2018","week:  2<br />median_price:  2600000<br />year: 2018","week:  3<br />median_price:  2525000<br />year: 2018","week:  4<br />median_price:  2650000<br />year: 2018","week:  5<br />median_price:  2600000<br />year: 2018","week:  6<br />median_price:  2687500<br />year: 2018","week:  7<br />median_price:  2775000<br />year: 2018","week:  8<br />median_price:  2725000<br />year: 2018","week:  9<br />median_price:  2560000<br />year: 2018","week: 10<br />median_price:  2750000<br />year: 2018","week: 11<br />median_price:  2750000<br />year: 2018","week: 12<br />median_price:  2767500<br />year: 2018","week: 13<br />median_price:  2537500<br />year: 2018","week: 14<br />median_price:  2897500<br />year: 2018","week: 15<br />median_price:  2800000<br />year: 2018","week: 16<br />median_price:  2740000<br />year: 2018","week: 17<br />median_price:  2765000<br />year: 2018","week: 18<br />median_price:  2850000<br />year: 2018","week: 19<br />median_price:  2800000<br />year: 2018","week: 20<br />median_price:  2900000<br />year: 2018","week: 21<br />median_price:  2747500<br />year: 2018","week: 22<br />median_price:  2960000<br />year: 2018","week: 23<br />median_price:  2900000<br />year: 2018","week: 24<br />median_price:  2837500<br />year: 2018","week: 25<br />median_price:  3075000<br />year: 2018","week: 26<br />median_price:  2992500<br />year: 2018","week: 27<br />median_price:  3055000<br />year: 2018","week: 28<br />median_price:  2920000<br />year: 2018","week: 29<br />median_price:  2750000<br />year: 2018","week: 30<br />median_price:  2750000<br />year: 2018","week: 31<br />median_price:  2855000<br />year: 2018","week: 32<br />median_price:  2800000<br />year: 2018","week: 33<br />median_price:  2950000<br />year: 2018","week: 34<br />median_price:  3220000<br />year: 2018","week: 35<br />median_price:  3000000<br />year: 2018","week: 36<br />median_price:  3000000<br />year: 2018","week: 37<br />median_price:  2900000<br />year: 2018","week: 38<br />median_price:  2905000<br />year: 2018","week: 39<br />median_price:  3000000<br />year: 2018","week: 40<br />median_price:  2850000<br />year: 2018","week: 41<br />median_price:  3050000<br />year: 2018","week: 42<br />median_price:  2950000<br />year: 2018","week: 43<br />median_price:  3050000<br />year: 2018","week: 44<br />median_price:  2875000<br />year: 2018","week: 45<br />median_price:  2875000<br />year: 2018","week: 46<br />median_price:  2900000<br />year: 2018","week: 47<br />median_price:  2947500<br />year: 2018","week: 48<br />median_price:  2830000<br />year: 2018","week: 49<br />median_price:  2805000<br />year: 2018","week: 50<br />median_price:  2750000<br />year: 2018","week: 51<br />median_price:  2975000<br />year: 2018","week: 52<br />median_price:  3165000<br />year: 2018"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(97,156,255,1)","dash":"solid"},"hoveron":"points","name":"2018","legendgroup":"2018","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49],"y":[2910000,2850000,2900000,3000000,2967500,3050000,3075000,3037500,2900000,2992500,3330000,3150000,2905000,3100000,3780000,3100000,3100000,3355000,3400000,3300000,3247500,3540000,3300000,3425000,3172500,3450000,3055000,2725000,3200000,3115000,2800000,3000000,3245000,3250000,3332500,3250000,3250000,3600000,3600000,3400000,3695000,3550000,3510000,3600000,3500000,3650000,3790000,3700000,3730000],"text":["week:  1<br />median_price:  2910000<br />year: 2019","week:  2<br />median_price:  2850000<br />year: 2019","week:  3<br />median_price:  2900000<br />year: 2019","week:  4<br />median_price:  3000000<br />year: 2019","week:  5<br />median_price:  2967500<br />year: 2019","week:  6<br />median_price:  3050000<br />year: 2019","week:  7<br />median_price:  3075000<br />year: 2019","week:  8<br />median_price:  3037500<br />year: 2019","week:  9<br />median_price:  2900000<br />year: 2019","week: 10<br />median_price:  2992500<br />year: 2019","week: 11<br />median_price:  3330000<br />year: 2019","week: 12<br />median_price:  3150000<br />year: 2019","week: 13<br />median_price:  2905000<br />year: 2019","week: 14<br />median_price:  3100000<br />year: 2019","week: 15<br />median_price:  3780000<br />year: 2019","week: 16<br />median_price:  3100000<br />year: 2019","week: 17<br />median_price:  3100000<br />year: 2019","week: 18<br />median_price:  3355000<br />year: 2019","week: 19<br />median_price:  3400000<br />year: 2019","week: 20<br />median_price:  3300000<br />year: 2019","week: 21<br />median_price:  3247500<br />year: 2019","week: 22<br />median_price:  3540000<br />year: 2019","week: 23<br />median_price:  3300000<br />year: 2019","week: 24<br />median_price:  3425000<br />year: 2019","week: 25<br />median_price:  3172500<br />year: 2019","week: 26<br />median_price:  3450000<br />year: 2019","week: 27<br />median_price:  3055000<br />year: 2019","week: 28<br />median_price:  2725000<br />year: 2019","week: 29<br />median_price:  3200000<br />year: 2019","week: 30<br />median_price:  3115000<br />year: 2019","week: 31<br />median_price:  2800000<br />year: 2019","week: 32<br />median_price:  3000000<br />year: 2019","week: 33<br />median_price:  3245000<br />year: 2019","week: 34<br />median_price:  3250000<br />year: 2019","week: 35<br />median_price:  3332500<br />year: 2019","week: 36<br />median_price:  3250000<br />year: 2019","week: 37<br />median_price:  3250000<br />year: 2019","week: 38<br />median_price:  3600000<br />year: 2019","week: 39<br />median_price:  3600000<br />year: 2019","week: 40<br />median_price:  3400000<br />year: 2019","week: 41<br />median_price:  3695000<br />year: 2019","week: 42<br />median_price:  3550000<br />year: 2019","week: 43<br />median_price:  3510000<br />year: 2019","week: 44<br />median_price:  3600000<br />year: 2019","week: 45<br />median_price:  3500000<br />year: 2019","week: 46<br />median_price:  3650000<br />year: 2019","week: 47<br />median_price:  3790000<br />year: 2019","week: 48<br />median_price:  3700000<br />year: 2019","week: 49<br />median_price:  3730000<br />year: 2019"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(245,100,227,1)","dash":"solid"},"hoveron":"points","name":"2019","legendgroup":"2019","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null}],"layout":{"margin":{"t":26.958904109589,"r":7.30593607305936,"b":40.9132420091324,"l":66.4840182648402},"plot_bgcolor":"rgba(235,235,235,1)","paper_bgcolor":"rgba(255,255,255,1)","font":{"color":"rgba(0,0,0,1)","family":"","size":14.6118721461187},"xaxis":{"domain":[0,1],"automargin":true,"type":"linear","autorange":false,"range":[-1.55,54.55],"tickmode":"array","ticktext":["0","10","20","30","40","50"],"tickvals":[0,10,20,30,40,50],"categoryorder":"array","categoryarray":["0","10","20","30","40","50"],"nticks":null,"ticks":"outside","tickcolor":"rgba(51,51,51,1)","ticklen":3.65296803652968,"tickwidth":0.66417600664176,"showticklabels":true,"tickfont":{"color":"rgba(77,77,77,1)","family":"","size":11.689497716895},"tickangle":-0,"showline":false,"linecolor":null,"linewidth":0,"showgrid":true,"gridcolor":"rgba(255,255,255,1)","gridwidth":0.66417600664176,"zeroline":false,"anchor":"y","title":{"text":"week","font":{"color":"rgba(0,0,0,1)","family":"","size":14.6118721461187}},"hoverformat":".2f"},"yaxis":{"domain":[0,1],"automargin":true,"type":"linear","autorange":false,"range":[1298625,10623875],"tickmode":"array","ticktext":["2.5e+06","5.0e+06","7.5e+06","1.0e+07"],"tickvals":[2500000,5000000,7500000,10000000],"categoryorder":"array","categoryarray":["2.5e+06","5.0e+06","7.5e+06","1.0e+07"],"nticks":null,"ticks":"outside","tickcolor":"rgba(51,51,51,1)","ticklen":3.65296803652968,"tickwidth":0.66417600664176,"showticklabels":true,"tickfont":{"color":"rgba(77,77,77,1)","family":"","size":11.689497716895},"tickangle":-0,"showline":false,"linecolor":null,"linewidth":0,"showgrid":true,"gridcolor":"rgba(255,255,255,1)","gridwidth":0.66417600664176,"zeroline":false,"anchor":"x","title":{"text":"median_price","font":{"color":"rgba(0,0,0,1)","family":"","size":14.6118721461187}},"hoverformat":".2f"},"shapes":[{"type":"rect","fillcolor":null,"line":{"color":null,"width":0,"linetype":[]},"yref":"paper","xref":"paper","x0":0,"x1":1,"y0":0,"y1":1}],"showlegend":true,"legend":{"bgcolor":"rgba(255,255,255,1)","bordercolor":"transparent","borderwidth":1.88976377952756,"font":{"color":"rgba(0,0,0,1)","family":"","size":11.689497716895},"y":0.891732283464567},"annotations":[{"text":"year","x":1.02,"y":1,"showarrow":false,"ax":0,"ay":0,"font":{"color":"rgba(0,0,0,1)","family":"","size":14.6118721461187},"xref":"paper","yref":"paper","textangle":-0,"xanchor":"left","yanchor":"bottom","legendTitle":true}],"hovermode":"closest","barmode":"relative"},"config":{"doubleClick":"reset","showSendToCloud":false},"source":"A","attrs":{"400172ac4fa7":{"x":{},"y":{},"colour":{},"type":"scatter"}},"cur_data":"400172ac4fa7","visdat":{"400172ac4fa7":["function (y) ","x"]},"highlight":{"on":"plotly_click","persistent":false,"dynamic":false,"selectize":false,"opacityDim":0.2,"selected":{"opacity":1},"debounce":0},"shinyEvents":["plotly_hover","plotly_click","plotly_selected","plotly_relayout","plotly_brushed","plotly_brushing","plotly_clickannotation","plotly_doubleclick","plotly_deselect","plotly_afterplot"],"base_url":"https://plot.ly"},"evals":[],"jsHooks":[]}</script>
+
+---
+
+
+```r
+library(ggiraph)
+
+data &lt;- weekly_sales %&gt;% 
+  group_by(year, week) %&gt;% 
+  summarise(median_price = median(price))
+
+p &lt;- ggplot(data) +
+  geom_point_interactive(aes(x = week, y = median_price, color = year,
+                            tooltip = median_price, data_id = median_price))
+```
+
+---
+
+
+```r
+girafe(ggobj = p)
+```
+
+<div id="htmlwidget-da63e34585cbb1092df8" style="width:100%;height:100%;" class="girafe html-widget"></div>
+<script type="application/json" data-for="htmlwidget-da63e34585cbb1092df8">{"x":{"html":"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd\" viewBox=\"0 0 432.00 360.00\">\n  <g>\n    <defs>\n      <clipPath id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_1\">\n        <rect x=\"0.00\" y=\"0.00\" width=\"432.00\" height=\"360.00\"/>\n      <\/clipPath>\n    <\/defs>\n    <rect x=\"0.00\" y=\"0.00\" width=\"432.00\" height=\"360.00\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_1\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_1)\" fill=\"#FFFFFF\" fill-opacity=\"1\" stroke-width=\"0.75\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <defs>\n      <clipPath id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_2\">\n        <rect x=\"0.00\" y=\"0.00\" width=\"432.00\" height=\"360.00\"/>\n      <\/clipPath>\n    <\/defs>\n    <rect x=\"0.00\" y=\"0.00\" width=\"432.00\" height=\"360.00\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_2\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_2)\" fill=\"#FFFFFF\" fill-opacity=\"1\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <defs>\n      <clipPath id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3\">\n        <rect x=\"55.52\" y=\"5.48\" width=\"306.75\" height=\"322.78\"/>\n      <\/clipPath>\n    <\/defs>\n    <rect x=\"55.52\" y=\"5.48\" width=\"306.75\" height=\"322.78\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_3\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#EBEBEB\" fill-opacity=\"1\" stroke=\"none\"/>\n    <polyline points=\"55.52,243.41 362.27,243.41\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_4\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"0.533489\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"55.52,156.87 362.27,156.87\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_5\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"0.533489\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"55.52,70.34 362.27,70.34\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_6\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"0.533489\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"91.34,328.26 91.34,5.48\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_7\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"0.533489\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"146.02,328.26 146.02,5.48\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_8\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"0.533489\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"200.70,328.26 200.70,5.48\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_9\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"0.533489\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"255.38,328.26 255.38,5.48\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_10\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"0.533489\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"310.05,328.26 310.05,5.48\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_11\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"0.533489\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"55.52,286.67 362.27,286.67\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_12\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"55.52,200.14 362.27,200.14\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_13\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"55.52,113.61 362.27,113.61\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_14\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"55.52,27.07 362.27,27.07\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_15\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"64.00,328.26 64.00,5.48\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_16\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"118.68,328.26 118.68,5.48\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_17\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"173.36,328.26 173.36,5.48\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_18\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"228.04,328.26 228.04,5.48\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_19\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"282.72,328.26 282.72,5.48\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_20\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"337.39,328.26 337.39,5.48\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_21\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <circle cx=\"151.48\" cy=\"20.15\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_22\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"10200000\" title=\"10200000\"/>\n    <circle cx=\"156.95\" cy=\"143.89\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_23\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"6625000\" title=\"6625000\"/>\n    <circle cx=\"167.89\" cy=\"123.99\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_24\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"7200000\" title=\"7200000\"/>\n    <circle cx=\"173.36\" cy=\"191.49\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_25\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"5250000\" title=\"5250000\"/>\n    <circle cx=\"178.82\" cy=\"137.66\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_26\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"6805000\" title=\"6805000\"/>\n    <circle cx=\"184.29\" cy=\"126.07\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_27\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"7140000\" title=\"7140000\"/>\n    <circle cx=\"189.76\" cy=\"200.66\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_28\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"4985000\" title=\"4985000\"/>\n    <circle cx=\"200.70\" cy=\"127.45\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_29\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"7100000\" title=\"7100000\"/>\n    <circle cx=\"206.16\" cy=\"99.76\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_30\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"7900000\" title=\"7900000\"/>\n    <circle cx=\"211.63\" cy=\"177.64\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_31\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"5650000\" title=\"5650000\"/>\n    <circle cx=\"244.44\" cy=\"136.62\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_32\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"6835000\" title=\"6835000\"/>\n    <circle cx=\"249.91\" cy=\"220.91\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_33\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"4400000\" title=\"4400000\"/>\n    <circle cx=\"255.38\" cy=\"100.63\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_34\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"7875000\" title=\"7875000\"/>\n    <circle cx=\"260.84\" cy=\"184.74\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_35\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"5445000\" title=\"5445000\"/>\n    <circle cx=\"266.31\" cy=\"27.07\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_36\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"1e+07\" title=\"1e+07\"/>\n    <circle cx=\"271.78\" cy=\"117.07\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_37\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"7400000\" title=\"7400000\"/>\n    <circle cx=\"277.25\" cy=\"190.62\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_38\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"5275000\" title=\"5275000\"/>\n    <circle cx=\"282.72\" cy=\"252.06\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_39\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3500000\" title=\"3500000\"/>\n    <circle cx=\"288.18\" cy=\"89.38\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_40\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"8200000\" title=\"8200000\"/>\n    <circle cx=\"299.12\" cy=\"210.09\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_41\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"4712500\" title=\"4712500\"/>\n    <circle cx=\"304.59\" cy=\"221.60\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_42\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"4380000\" title=\"4380000\"/>\n    <circle cx=\"310.05\" cy=\"130.91\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_43\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"7e+06\" title=\"7e+06\"/>\n    <circle cx=\"315.52\" cy=\"163.80\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_44\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"6050000\" title=\"6050000\"/>\n    <circle cx=\"320.99\" cy=\"182.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_45\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"5500000\" title=\"5500000\"/>\n    <circle cx=\"326.46\" cy=\"80.72\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_46\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"8450000\" title=\"8450000\"/>\n    <circle cx=\"331.93\" cy=\"307.44\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_47\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"1900000\" title=\"1900000\"/>\n    <circle cx=\"337.39\" cy=\"37.11\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_48\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"9710000\" title=\"9710000\"/>\n    <circle cx=\"74.93\" cy=\"82.45\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_49\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"8400000\" title=\"8400000\"/>\n    <circle cx=\"85.87\" cy=\"106.68\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_50\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"7700000\" title=\"7700000\"/>\n    <circle cx=\"91.34\" cy=\"235.10\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_51\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3990000\" title=\"3990000\"/>\n    <circle cx=\"96.81\" cy=\"162.06\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_52\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"6100000\" title=\"6100000\"/>\n    <circle cx=\"102.27\" cy=\"260.71\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_53\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3250000\" title=\"3250000\"/>\n    <circle cx=\"107.74\" cy=\"73.80\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_54\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"8650000\" title=\"8650000\"/>\n    <circle cx=\"113.21\" cy=\"134.37\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_55\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"6900000\" title=\"6900000\"/>\n    <circle cx=\"118.68\" cy=\"194.60\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_56\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"5160000\" title=\"5160000\"/>\n    <circle cx=\"124.14\" cy=\"167.26\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_57\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"5950000\" title=\"5950000\"/>\n    <circle cx=\"129.61\" cy=\"123.13\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_58\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"7225000\" title=\"7225000\"/>\n    <circle cx=\"135.08\" cy=\"104.95\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_59\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"7750000\" title=\"7750000\"/>\n    <circle cx=\"146.02\" cy=\"194.08\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_60\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"5175000\" title=\"5175000\"/>\n    <circle cx=\"151.48\" cy=\"113.61\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_61\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"7500000\" title=\"7500000\"/>\n    <circle cx=\"156.95\" cy=\"210.18\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_62\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"4710000\" title=\"4710000\"/>\n    <circle cx=\"162.42\" cy=\"139.57\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_63\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"6750000\" title=\"6750000\"/>\n    <circle cx=\"167.89\" cy=\"140.69\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_64\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"6717500\" title=\"6717500\"/>\n    <circle cx=\"173.36\" cy=\"49.57\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_65\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"9350000\" title=\"9350000\"/>\n    <circle cx=\"178.82\" cy=\"189.76\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_66\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"5300000\" title=\"5300000\"/>\n    <circle cx=\"184.29\" cy=\"150.38\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_67\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"6437500\" title=\"6437500\"/>\n    <circle cx=\"189.76\" cy=\"181.10\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_68\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"5550000\" title=\"5550000\"/>\n    <circle cx=\"195.23\" cy=\"80.20\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_69\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"8465000\" title=\"8465000\"/>\n    <circle cx=\"200.70\" cy=\"82.45\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_70\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"8400000\" title=\"8400000\"/>\n    <circle cx=\"206.16\" cy=\"63.42\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_71\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"8950000\" title=\"8950000\"/>\n    <circle cx=\"217.10\" cy=\"113.61\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_72\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"7500000\" title=\"7500000\"/>\n    <circle cx=\"238.97\" cy=\"286.33\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_73\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2510000\" title=\"2510000\"/>\n    <circle cx=\"244.44\" cy=\"288.49\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_74\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2447500\" title=\"2447500\"/>\n    <circle cx=\"249.91\" cy=\"283.21\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_75\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2600000\" title=\"2600000\"/>\n    <circle cx=\"255.38\" cy=\"288.40\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_76\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2450000\" title=\"2450000\"/>\n    <circle cx=\"260.84\" cy=\"278.54\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_77\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2735000\" title=\"2735000\"/>\n    <circle cx=\"266.31\" cy=\"283.21\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_78\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2600000\" title=\"2600000\"/>\n    <circle cx=\"271.78\" cy=\"276.29\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_79\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2800000\" title=\"2800000\"/>\n    <circle cx=\"277.25\" cy=\"277.85\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_80\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2755000\" title=\"2755000\"/>\n    <circle cx=\"282.72\" cy=\"286.67\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_81\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2500000\" title=\"2500000\"/>\n    <circle cx=\"288.18\" cy=\"281.48\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_82\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2650000\" title=\"2650000\"/>\n    <circle cx=\"293.65\" cy=\"285.98\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_83\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2520000\" title=\"2520000\"/>\n    <circle cx=\"299.12\" cy=\"284.60\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_84\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2560000\" title=\"2560000\"/>\n    <circle cx=\"304.59\" cy=\"278.02\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_85\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2750000\" title=\"2750000\"/>\n    <circle cx=\"310.05\" cy=\"283.73\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_86\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2585000\" title=\"2585000\"/>\n    <circle cx=\"315.52\" cy=\"289.10\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_87\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2430000\" title=\"2430000\"/>\n    <circle cx=\"320.99\" cy=\"289.70\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_88\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2412500\" title=\"2412500\"/>\n    <circle cx=\"326.46\" cy=\"284.60\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_89\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2560000\" title=\"2560000\"/>\n    <circle cx=\"331.93\" cy=\"289.96\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_90\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2405000\" title=\"2405000\"/>\n    <circle cx=\"337.39\" cy=\"283.56\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_91\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2590000\" title=\"2590000\"/>\n    <circle cx=\"342.86\" cy=\"271.44\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_92\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2940000\" title=\"2940000\"/>\n    <circle cx=\"69.47\" cy=\"285.81\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_93\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2525000\" title=\"2525000\"/>\n    <circle cx=\"74.93\" cy=\"286.15\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_94\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2515000\" title=\"2515000\"/>\n    <circle cx=\"80.40\" cy=\"282.35\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_95\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2625000\" title=\"2625000\"/>\n    <circle cx=\"85.87\" cy=\"284.94\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_96\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2550000\" title=\"2550000\"/>\n    <circle cx=\"91.34\" cy=\"271.10\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_97\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2950000\" title=\"2950000\"/>\n    <circle cx=\"96.81\" cy=\"281.13\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_98\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2660000\" title=\"2660000\"/>\n    <circle cx=\"102.27\" cy=\"288.40\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_99\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2450000\" title=\"2450000\"/>\n    <circle cx=\"107.74\" cy=\"283.21\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_100\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2600000\" title=\"2600000\"/>\n    <circle cx=\"113.21\" cy=\"279.75\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_101\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2700000\" title=\"2700000\"/>\n    <circle cx=\"118.68\" cy=\"268.76\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_102\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3017500\" title=\"3017500\"/>\n    <circle cx=\"124.14\" cy=\"280.61\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_103\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2675000\" title=\"2675000\"/>\n    <circle cx=\"129.61\" cy=\"279.06\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_104\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2720000\" title=\"2720000\"/>\n    <circle cx=\"135.08\" cy=\"286.67\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_105\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2500000\" title=\"2500000\"/>\n    <circle cx=\"140.55\" cy=\"284.94\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_106\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2550000\" title=\"2550000\"/>\n    <circle cx=\"146.02\" cy=\"286.67\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_107\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2500000\" title=\"2500000\"/>\n    <circle cx=\"151.48\" cy=\"284.51\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_108\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2562500\" title=\"2562500\"/>\n    <circle cx=\"156.95\" cy=\"283.21\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_109\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2600000\" title=\"2600000\"/>\n    <circle cx=\"162.42\" cy=\"281.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_110\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2640000\" title=\"2640000\"/>\n    <circle cx=\"167.89\" cy=\"283.90\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_111\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2580000\" title=\"2580000\"/>\n    <circle cx=\"173.36\" cy=\"284.60\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_112\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2560000\" title=\"2560000\"/>\n    <circle cx=\"178.82\" cy=\"288.40\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_113\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2450000\" title=\"2450000\"/>\n    <circle cx=\"184.29\" cy=\"284.94\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_114\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2550000\" title=\"2550000\"/>\n    <circle cx=\"189.76\" cy=\"282.35\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_115\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2625000\" title=\"2625000\"/>\n    <circle cx=\"195.23\" cy=\"291.86\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_116\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2350000\" title=\"2350000\"/>\n    <circle cx=\"200.70\" cy=\"284.94\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_117\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2550000\" title=\"2550000\"/>\n    <circle cx=\"206.16\" cy=\"278.02\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_118\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2750000\" title=\"2750000\"/>\n    <circle cx=\"211.63\" cy=\"263.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_119\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3160000\" title=\"3160000\"/>\n    <circle cx=\"217.10\" cy=\"283.21\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_120\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2600000\" title=\"2600000\"/>\n    <circle cx=\"222.57\" cy=\"279.75\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_121\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2700000\" title=\"2700000\"/>\n    <circle cx=\"228.04\" cy=\"282.52\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_122\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2620000\" title=\"2620000\"/>\n    <circle cx=\"233.50\" cy=\"281.13\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_123\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2660000\" title=\"2660000\"/>\n    <circle cx=\"238.97\" cy=\"289.79\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_124\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2410000\" title=\"2410000\"/>\n    <circle cx=\"244.44\" cy=\"281.91\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_125\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2637500\" title=\"2637500\"/>\n    <circle cx=\"249.91\" cy=\"281.48\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_126\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2650000\" title=\"2650000\"/>\n    <circle cx=\"255.38\" cy=\"279.40\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_127\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2710000\" title=\"2710000\"/>\n    <circle cx=\"260.84\" cy=\"269.37\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_128\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3e+06\" title=\"3e+06\"/>\n    <circle cx=\"266.31\" cy=\"276.29\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_129\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2800000\" title=\"2800000\"/>\n    <circle cx=\"271.78\" cy=\"278.88\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_130\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2725000\" title=\"2725000\"/>\n    <circle cx=\"277.25\" cy=\"284.60\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_131\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2560000\" title=\"2560000\"/>\n    <circle cx=\"282.72\" cy=\"279.40\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_132\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2710000\" title=\"2710000\"/>\n    <circle cx=\"288.18\" cy=\"278.54\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_133\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2735000\" title=\"2735000\"/>\n    <circle cx=\"293.65\" cy=\"278.02\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_134\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2750000\" title=\"2750000\"/>\n    <circle cx=\"299.12\" cy=\"275.94\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_135\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2810000\" title=\"2810000\"/>\n    <circle cx=\"304.59\" cy=\"276.29\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_136\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2800000\" title=\"2800000\"/>\n    <circle cx=\"310.05\" cy=\"269.97\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_137\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2982500\" title=\"2982500\"/>\n    <circle cx=\"315.52\" cy=\"272.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_138\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2900000\" title=\"2900000\"/>\n    <circle cx=\"320.99\" cy=\"274.38\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_139\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2855000\" title=\"2855000\"/>\n    <circle cx=\"326.46\" cy=\"275.25\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_140\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2830000\" title=\"2830000\"/>\n    <circle cx=\"331.93\" cy=\"276.29\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_141\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2800000\" title=\"2800000\"/>\n    <circle cx=\"337.39\" cy=\"270.32\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_142\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2972500\" title=\"2972500\"/>\n    <circle cx=\"342.86\" cy=\"262.44\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_143\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3200000\" title=\"3200000\"/>\n    <circle cx=\"69.47\" cy=\"270.58\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_144\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2965000\" title=\"2965000\"/>\n    <circle cx=\"74.93\" cy=\"279.32\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_145\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2712500\" title=\"2712500\"/>\n    <circle cx=\"80.40\" cy=\"271.79\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_146\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2930000\" title=\"2930000\"/>\n    <circle cx=\"85.87\" cy=\"277.50\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_147\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2765000\" title=\"2765000\"/>\n    <circle cx=\"91.34\" cy=\"270.75\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_148\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2960000\" title=\"2960000\"/>\n    <circle cx=\"96.81\" cy=\"274.38\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_149\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2855000\" title=\"2855000\"/>\n    <circle cx=\"102.27\" cy=\"278.62\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_150\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2732500\" title=\"2732500\"/>\n    <circle cx=\"107.74\" cy=\"266.68\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_151\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3077500\" title=\"3077500\"/>\n    <circle cx=\"113.21\" cy=\"275.25\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_152\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2830000\" title=\"2830000\"/>\n    <circle cx=\"118.68\" cy=\"273.35\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_153\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2885000\" title=\"2885000\"/>\n    <circle cx=\"124.14\" cy=\"274.38\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_154\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2855000\" title=\"2855000\"/>\n    <circle cx=\"129.61\" cy=\"279.06\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_155\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2720000\" title=\"2720000\"/>\n    <circle cx=\"135.08\" cy=\"274.04\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_156\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2865000\" title=\"2865000\"/>\n    <circle cx=\"140.55\" cy=\"272.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_157\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2900000\" title=\"2900000\"/>\n    <circle cx=\"146.02\" cy=\"273.69\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_158\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2875000\" title=\"2875000\"/>\n    <circle cx=\"151.48\" cy=\"272.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_159\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2900000\" title=\"2900000\"/>\n    <circle cx=\"156.95\" cy=\"278.71\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_160\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2730000\" title=\"2730000\"/>\n    <circle cx=\"162.42\" cy=\"277.67\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_161\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2760000\" title=\"2760000\"/>\n    <circle cx=\"167.89\" cy=\"277.59\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_162\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2762500\" title=\"2762500\"/>\n    <circle cx=\"173.36\" cy=\"271.44\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_163\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2940000\" title=\"2940000\"/>\n    <circle cx=\"178.82\" cy=\"277.15\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_164\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2775000\" title=\"2775000\"/>\n    <circle cx=\"184.29\" cy=\"274.04\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_165\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2865000\" title=\"2865000\"/>\n    <circle cx=\"189.76\" cy=\"269.37\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_166\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3e+06\" title=\"3e+06\"/>\n    <circle cx=\"195.23\" cy=\"272.65\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_167\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2905000\" title=\"2905000\"/>\n    <circle cx=\"200.70\" cy=\"270.23\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_168\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2975000\" title=\"2975000\"/>\n    <circle cx=\"206.16\" cy=\"283.21\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_169\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2600000\" title=\"2600000\"/>\n    <circle cx=\"211.63\" cy=\"272.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_170\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2900000\" title=\"2900000\"/>\n    <circle cx=\"217.10\" cy=\"264.17\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_171\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3150000\" title=\"3150000\"/>\n    <circle cx=\"222.57\" cy=\"272.48\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_172\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2910000\" title=\"2910000\"/>\n    <circle cx=\"228.04\" cy=\"272.13\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_173\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2920000\" title=\"2920000\"/>\n    <circle cx=\"233.50\" cy=\"274.56\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_174\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2850000\" title=\"2850000\"/>\n    <circle cx=\"238.97\" cy=\"272.13\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_175\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2920000\" title=\"2920000\"/>\n    <circle cx=\"244.44\" cy=\"274.38\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_176\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2855000\" title=\"2855000\"/>\n    <circle cx=\"249.91\" cy=\"276.72\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_177\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2787500\" title=\"2787500\"/>\n    <circle cx=\"255.38\" cy=\"280.01\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_178\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2692500\" title=\"2692500\"/>\n    <circle cx=\"260.84\" cy=\"276.81\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_179\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2785000\" title=\"2785000\"/>\n    <circle cx=\"266.31\" cy=\"274.56\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_180\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2850000\" title=\"2850000\"/>\n    <circle cx=\"271.78\" cy=\"278.54\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_181\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2735000\" title=\"2735000\"/>\n    <circle cx=\"277.25\" cy=\"273.61\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_182\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2877500\" title=\"2877500\"/>\n    <circle cx=\"282.72\" cy=\"276.29\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_183\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2800000\" title=\"2800000\"/>\n    <circle cx=\"288.18\" cy=\"274.56\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_184\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2850000\" title=\"2850000\"/>\n    <circle cx=\"293.65\" cy=\"279.06\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_185\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2720000\" title=\"2720000\"/>\n    <circle cx=\"299.12\" cy=\"275.25\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_186\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2830000\" title=\"2830000\"/>\n    <circle cx=\"304.59\" cy=\"282.86\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_187\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2610000\" title=\"2610000\"/>\n    <circle cx=\"310.05\" cy=\"282.52\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_188\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2620000\" title=\"2620000\"/>\n    <circle cx=\"315.52\" cy=\"278.02\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_189\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2750000\" title=\"2750000\"/>\n    <circle cx=\"320.99\" cy=\"279.75\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_190\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2700000\" title=\"2700000\"/>\n    <circle cx=\"326.46\" cy=\"279.75\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_191\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2700000\" title=\"2700000\"/>\n    <circle cx=\"331.93\" cy=\"282.17\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_192\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2630000\" title=\"2630000\"/>\n    <circle cx=\"337.39\" cy=\"284.08\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_193\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2575000\" title=\"2575000\"/>\n    <circle cx=\"342.86\" cy=\"283.90\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_194\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2580000\" title=\"2580000\"/>\n    <circle cx=\"348.33\" cy=\"313.58\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_195\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"1722500\" title=\"1722500\"/>\n    <circle cx=\"69.47\" cy=\"301.38\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_196\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2075000\" title=\"2075000\"/>\n    <circle cx=\"74.93\" cy=\"283.21\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_197\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2600000\" title=\"2600000\"/>\n    <circle cx=\"80.40\" cy=\"285.81\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_198\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2525000\" title=\"2525000\"/>\n    <circle cx=\"85.87\" cy=\"281.48\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_199\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2650000\" title=\"2650000\"/>\n    <circle cx=\"91.34\" cy=\"283.21\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_200\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2600000\" title=\"2600000\"/>\n    <circle cx=\"96.81\" cy=\"280.18\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_201\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2687500\" title=\"2687500\"/>\n    <circle cx=\"102.27\" cy=\"277.15\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_202\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2775000\" title=\"2775000\"/>\n    <circle cx=\"107.74\" cy=\"278.88\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_203\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2725000\" title=\"2725000\"/>\n    <circle cx=\"113.21\" cy=\"284.60\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_204\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2560000\" title=\"2560000\"/>\n    <circle cx=\"118.68\" cy=\"278.02\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_205\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2750000\" title=\"2750000\"/>\n    <circle cx=\"124.14\" cy=\"278.02\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_206\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2750000\" title=\"2750000\"/>\n    <circle cx=\"129.61\" cy=\"277.41\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_207\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2767500\" title=\"2767500\"/>\n    <circle cx=\"135.08\" cy=\"285.37\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_208\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2537500\" title=\"2537500\"/>\n    <circle cx=\"140.55\" cy=\"272.91\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_209\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2897500\" title=\"2897500\"/>\n    <circle cx=\"146.02\" cy=\"276.29\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_210\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2800000\" title=\"2800000\"/>\n    <circle cx=\"151.48\" cy=\"278.37\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_211\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2740000\" title=\"2740000\"/>\n    <circle cx=\"156.95\" cy=\"277.50\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_212\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2765000\" title=\"2765000\"/>\n    <circle cx=\"162.42\" cy=\"274.56\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_213\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2850000\" title=\"2850000\"/>\n    <circle cx=\"167.89\" cy=\"276.29\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_214\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2800000\" title=\"2800000\"/>\n    <circle cx=\"173.36\" cy=\"272.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_215\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2900000\" title=\"2900000\"/>\n    <circle cx=\"178.82\" cy=\"278.11\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_216\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2747500\" title=\"2747500\"/>\n    <circle cx=\"184.29\" cy=\"270.75\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_217\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2960000\" title=\"2960000\"/>\n    <circle cx=\"189.76\" cy=\"272.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_218\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2900000\" title=\"2900000\"/>\n    <circle cx=\"195.23\" cy=\"274.99\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_219\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2837500\" title=\"2837500\"/>\n    <circle cx=\"200.70\" cy=\"266.77\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_220\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3075000\" title=\"3075000\"/>\n    <circle cx=\"206.16\" cy=\"269.63\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_221\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2992500\" title=\"2992500\"/>\n    <circle cx=\"211.63\" cy=\"267.46\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_222\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3055000\" title=\"3055000\"/>\n    <circle cx=\"217.10\" cy=\"272.13\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_223\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2920000\" title=\"2920000\"/>\n    <circle cx=\"222.57\" cy=\"278.02\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_224\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2750000\" title=\"2750000\"/>\n    <circle cx=\"228.04\" cy=\"278.02\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_225\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2750000\" title=\"2750000\"/>\n    <circle cx=\"233.50\" cy=\"274.38\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_226\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2855000\" title=\"2855000\"/>\n    <circle cx=\"238.97\" cy=\"276.29\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_227\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2800000\" title=\"2800000\"/>\n    <circle cx=\"244.44\" cy=\"271.10\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_228\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2950000\" title=\"2950000\"/>\n    <circle cx=\"249.91\" cy=\"261.75\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_229\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3220000\" title=\"3220000\"/>\n    <circle cx=\"255.38\" cy=\"269.37\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_230\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3e+06\" title=\"3e+06\"/>\n    <circle cx=\"260.84\" cy=\"269.37\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_231\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3e+06\" title=\"3e+06\"/>\n    <circle cx=\"266.31\" cy=\"272.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_232\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2900000\" title=\"2900000\"/>\n    <circle cx=\"271.78\" cy=\"272.65\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_233\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2905000\" title=\"2905000\"/>\n    <circle cx=\"277.25\" cy=\"269.37\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_234\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3e+06\" title=\"3e+06\"/>\n    <circle cx=\"282.72\" cy=\"274.56\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_235\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2850000\" title=\"2850000\"/>\n    <circle cx=\"288.18\" cy=\"267.63\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_236\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3050000\" title=\"3050000\"/>\n    <circle cx=\"293.65\" cy=\"271.10\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_237\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2950000\" title=\"2950000\"/>\n    <circle cx=\"299.12\" cy=\"267.63\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_238\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3050000\" title=\"3050000\"/>\n    <circle cx=\"304.59\" cy=\"273.69\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_239\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2875000\" title=\"2875000\"/>\n    <circle cx=\"310.05\" cy=\"273.69\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_240\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2875000\" title=\"2875000\"/>\n    <circle cx=\"315.52\" cy=\"272.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_241\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2900000\" title=\"2900000\"/>\n    <circle cx=\"320.99\" cy=\"271.18\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_242\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2947500\" title=\"2947500\"/>\n    <circle cx=\"326.46\" cy=\"275.25\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_243\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2830000\" title=\"2830000\"/>\n    <circle cx=\"331.93\" cy=\"276.12\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_244\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2805000\" title=\"2805000\"/>\n    <circle cx=\"337.39\" cy=\"278.02\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_245\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2750000\" title=\"2750000\"/>\n    <circle cx=\"342.86\" cy=\"270.23\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_246\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2975000\" title=\"2975000\"/>\n    <circle cx=\"348.33\" cy=\"263.65\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_247\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3165000\" title=\"3165000\"/>\n    <circle cx=\"69.47\" cy=\"272.48\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_248\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2910000\" title=\"2910000\"/>\n    <circle cx=\"74.93\" cy=\"274.56\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_249\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2850000\" title=\"2850000\"/>\n    <circle cx=\"80.40\" cy=\"272.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_250\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2900000\" title=\"2900000\"/>\n    <circle cx=\"85.87\" cy=\"269.37\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_251\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3e+06\" title=\"3e+06\"/>\n    <circle cx=\"91.34\" cy=\"270.49\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_252\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2967500\" title=\"2967500\"/>\n    <circle cx=\"96.81\" cy=\"267.63\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_253\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3050000\" title=\"3050000\"/>\n    <circle cx=\"102.27\" cy=\"266.77\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_254\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3075000\" title=\"3075000\"/>\n    <circle cx=\"107.74\" cy=\"268.07\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_255\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3037500\" title=\"3037500\"/>\n    <circle cx=\"113.21\" cy=\"272.83\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_256\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2900000\" title=\"2900000\"/>\n    <circle cx=\"118.68\" cy=\"269.63\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_257\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2992500\" title=\"2992500\"/>\n    <circle cx=\"124.14\" cy=\"257.94\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_258\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3330000\" title=\"3330000\"/>\n    <circle cx=\"129.61\" cy=\"264.17\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_259\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3150000\" title=\"3150000\"/>\n    <circle cx=\"135.08\" cy=\"272.65\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_260\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2905000\" title=\"2905000\"/>\n    <circle cx=\"140.55\" cy=\"265.90\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_261\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3100000\" title=\"3100000\"/>\n    <circle cx=\"146.02\" cy=\"242.37\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_262\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3780000\" title=\"3780000\"/>\n    <circle cx=\"151.48\" cy=\"265.90\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_263\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3100000\" title=\"3100000\"/>\n    <circle cx=\"156.95\" cy=\"265.90\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_264\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3100000\" title=\"3100000\"/>\n    <circle cx=\"162.42\" cy=\"257.08\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_265\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3355000\" title=\"3355000\"/>\n    <circle cx=\"167.89\" cy=\"255.52\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_266\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3400000\" title=\"3400000\"/>\n    <circle cx=\"173.36\" cy=\"258.98\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_267\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3300000\" title=\"3300000\"/>\n    <circle cx=\"178.82\" cy=\"260.80\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_268\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3247500\" title=\"3247500\"/>\n    <circle cx=\"184.29\" cy=\"250.67\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_269\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3540000\" title=\"3540000\"/>\n    <circle cx=\"189.76\" cy=\"258.98\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_270\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3300000\" title=\"3300000\"/>\n    <circle cx=\"195.23\" cy=\"254.66\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_271\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3425000\" title=\"3425000\"/>\n    <circle cx=\"200.70\" cy=\"263.39\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_272\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3172500\" title=\"3172500\"/>\n    <circle cx=\"206.16\" cy=\"253.79\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_273\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3450000\" title=\"3450000\"/>\n    <circle cx=\"211.63\" cy=\"267.46\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_274\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3055000\" title=\"3055000\"/>\n    <circle cx=\"217.10\" cy=\"278.88\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_275\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2725000\" title=\"2725000\"/>\n    <circle cx=\"222.57\" cy=\"262.44\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_276\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3200000\" title=\"3200000\"/>\n    <circle cx=\"228.04\" cy=\"265.39\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_277\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3115000\" title=\"3115000\"/>\n    <circle cx=\"233.50\" cy=\"276.29\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_278\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"2800000\" title=\"2800000\"/>\n    <circle cx=\"238.97\" cy=\"269.37\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_279\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3e+06\" title=\"3e+06\"/>\n    <circle cx=\"244.44\" cy=\"260.89\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_280\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3245000\" title=\"3245000\"/>\n    <circle cx=\"249.91\" cy=\"260.71\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_281\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3250000\" title=\"3250000\"/>\n    <circle cx=\"255.38\" cy=\"257.86\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_282\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3332500\" title=\"3332500\"/>\n    <circle cx=\"260.84\" cy=\"260.71\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_283\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3250000\" title=\"3250000\"/>\n    <circle cx=\"266.31\" cy=\"260.71\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_284\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3250000\" title=\"3250000\"/>\n    <circle cx=\"271.78\" cy=\"248.60\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_285\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3600000\" title=\"3600000\"/>\n    <circle cx=\"277.25\" cy=\"248.60\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_286\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3600000\" title=\"3600000\"/>\n    <circle cx=\"282.72\" cy=\"255.52\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_287\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3400000\" title=\"3400000\"/>\n    <circle cx=\"288.18\" cy=\"245.31\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_288\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3695000\" title=\"3695000\"/>\n    <circle cx=\"293.65\" cy=\"250.33\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_289\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3550000\" title=\"3550000\"/>\n    <circle cx=\"299.12\" cy=\"251.71\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_290\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3510000\" title=\"3510000\"/>\n    <circle cx=\"304.59\" cy=\"248.60\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_291\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3600000\" title=\"3600000\"/>\n    <circle cx=\"310.05\" cy=\"252.06\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_292\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3500000\" title=\"3500000\"/>\n    <circle cx=\"315.52\" cy=\"246.87\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_293\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3650000\" title=\"3650000\"/>\n    <circle cx=\"320.99\" cy=\"242.02\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_294\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3790000\" title=\"3790000\"/>\n    <circle cx=\"326.46\" cy=\"245.14\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_295\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3700000\" title=\"3700000\"/>\n    <circle cx=\"331.93\" cy=\"244.10\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_296\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_3)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\" data-id=\"3730000\" title=\"3730000\"/>\n    <defs>\n      <clipPath id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4\">\n        <rect x=\"0.00\" y=\"0.00\" width=\"432.00\" height=\"360.00\"/>\n      <\/clipPath>\n    <\/defs>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"18.55\" y=\"289.83\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_297\" font-size=\"6.60pt\" fill=\"#4D4D4D\" fill-opacity=\"1\" font-family=\"Helvetica\">2.5e+06<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"18.55\" y=\"203.30\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_298\" font-size=\"6.60pt\" fill=\"#4D4D4D\" fill-opacity=\"1\" font-family=\"Helvetica\">5.0e+06<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"18.55\" y=\"116.76\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_299\" font-size=\"6.60pt\" fill=\"#4D4D4D\" fill-opacity=\"1\" font-family=\"Helvetica\">7.5e+06<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"18.55\" y=\"30.23\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_300\" font-size=\"6.60pt\" fill=\"#4D4D4D\" fill-opacity=\"1\" font-family=\"Helvetica\">1.0e+07<\/text>\n    <\/g>\n    <polyline points=\"52.78,286.67 55.52,286.67\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_301\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#333333\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"52.78,200.14 55.52,200.14\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_302\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#333333\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"52.78,113.61 55.52,113.61\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_303\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#333333\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"52.78,27.07 55.52,27.07\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_304\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#333333\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"64.00,331.00 64.00,328.26\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_305\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#333333\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"118.68,331.00 118.68,328.26\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_306\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#333333\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"173.36,331.00 173.36,328.26\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_307\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#333333\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"228.04,331.00 228.04,328.26\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_308\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#333333\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"282.72,331.00 282.72,328.26\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_309\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#333333\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <polyline points=\"337.39,331.00 337.39,328.26\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_310\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"none\" stroke-width=\"1.06698\" stroke=\"#333333\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"butt\"/>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"61.55\" y=\"339.50\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_311\" font-size=\"6.60pt\" fill=\"#4D4D4D\" fill-opacity=\"1\" font-family=\"Helvetica\">0<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"113.78\" y=\"339.50\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_312\" font-size=\"6.60pt\" fill=\"#4D4D4D\" fill-opacity=\"1\" font-family=\"Helvetica\">10<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"168.46\" y=\"339.50\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_313\" font-size=\"6.60pt\" fill=\"#4D4D4D\" fill-opacity=\"1\" font-family=\"Helvetica\">20<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"223.14\" y=\"339.50\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_314\" font-size=\"6.60pt\" fill=\"#4D4D4D\" fill-opacity=\"1\" font-family=\"Helvetica\">30<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"277.82\" y=\"339.50\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_315\" font-size=\"6.60pt\" fill=\"#4D4D4D\" fill-opacity=\"1\" font-family=\"Helvetica\">40<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"332.50\" y=\"339.50\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_316\" font-size=\"6.60pt\" fill=\"#4D4D4D\" fill-opacity=\"1\" font-family=\"Helvetica\">50<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"196.06\" y=\"352.08\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_317\" font-size=\"8.25pt\" font-family=\"Helvetica\">week<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text transform=\"translate(13.37,199.89) rotate(-90)\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_318\" font-size=\"8.25pt\" font-family=\"Helvetica\">median_price<\/text>\n    <\/g>\n    <rect x=\"373.23\" y=\"101.64\" width=\"53.29\" height=\"130.45\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_319\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#FFFFFF\" fill-opacity=\"1\" stroke=\"none\"/>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"378.71\" y=\"116.23\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_320\" font-size=\"8.25pt\" font-family=\"Helvetica\">year<\/text>\n    <\/g>\n    <rect x=\"378.71\" y=\"122.93\" width=\"17.28\" height=\"17.28\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_321\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#F2F2F2\" fill-opacity=\"1\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <circle cx=\"387.35\" cy=\"131.57\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_322\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#F8766D\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F8766D\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <rect x=\"378.71\" y=\"140.21\" width=\"17.28\" height=\"17.28\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_323\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#F2F2F2\" fill-opacity=\"1\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <circle cx=\"387.35\" cy=\"148.85\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_324\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#B79F00\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#B79F00\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <rect x=\"378.71\" y=\"157.49\" width=\"17.28\" height=\"17.28\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_325\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#F2F2F2\" fill-opacity=\"1\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <circle cx=\"387.35\" cy=\"166.13\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_326\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#00BA38\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BA38\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <rect x=\"378.71\" y=\"174.77\" width=\"17.28\" height=\"17.28\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_327\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#F2F2F2\" fill-opacity=\"1\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <circle cx=\"387.35\" cy=\"183.41\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_328\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#00BFC4\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#00BFC4\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <rect x=\"378.71\" y=\"192.05\" width=\"17.28\" height=\"17.28\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_329\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#F2F2F2\" fill-opacity=\"1\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <circle cx=\"387.35\" cy=\"200.69\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_330\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#619CFF\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#619CFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <rect x=\"378.71\" y=\"209.33\" width=\"17.28\" height=\"17.28\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_331\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#F2F2F2\" fill-opacity=\"1\" stroke-width=\"1.06698\" stroke=\"#FFFFFF\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <circle cx=\"387.35\" cy=\"217.97\" r=\"1.47pt\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_332\" clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\" fill=\"#F564E3\" fill-opacity=\"1\" stroke-width=\"0.708661\" stroke=\"#F564E3\" stroke-opacity=\"1\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"401.47\" y=\"134.73\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_333\" font-size=\"6.60pt\" font-family=\"Helvetica\">2014<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"401.47\" y=\"152.01\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_334\" font-size=\"6.60pt\" font-family=\"Helvetica\">2015<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"401.47\" y=\"169.29\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_335\" font-size=\"6.60pt\" font-family=\"Helvetica\">2016<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"401.47\" y=\"186.57\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_336\" font-size=\"6.60pt\" font-family=\"Helvetica\">2017<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"401.47\" y=\"203.85\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_337\" font-size=\"6.60pt\" font-family=\"Helvetica\">2018<\/text>\n    <\/g>\n    <g clip-path=\"url(#svg_904b666f-0d37-4252-a8d9-081a21accecd_cl_4)\">\n      <text x=\"401.47\" y=\"221.13\" id=\"svg_904b666f-0d37-4252-a8d9-081a21accecd_el_338\" font-size=\"6.60pt\" font-family=\"Helvetica\">2019<\/text>\n    <\/g>\n  <\/g>\n<\/svg>\n","js":null,"uid":"svg_904b666f-0d37-4252-a8d9-081a21accecd","ratio":1.2,"settings":{"tooltip":{"css":" .tooltip_SVGID_ { padding:5px;background:black;color:white;border-radius:2px 2px 2px 2px ; position:absolute;pointer-events:none;z-index:999;}\n","offx":10,"offy":0,"use_cursor_pos":true,"opacity":0.9,"usefill":false,"usestroke":false,"delay":{"over":200,"out":500}},"hover":{"css":" .hover_SVGID_ { fill:orange;stroke:gray; }\n"},"hoverkey":{"css":" .hover_key_SVGID_ { stroke:red; }\n"},"hovertheme":{"css":" .hover_theme_SVGID_ { fill:green; }\n"},"zoom":{"min":1,"max":1},"capture":{"css":" .selected_SVGID_ { fill:red;stroke:gray; }\n","type":"multiple","only_shiny":true,"selected":[]},"capturekey":{"css":" .selected_key_SVGID_ { stroke:gray; }\n","type":"single","only_shiny":true,"selected":[]},"capturetheme":{"css":" .selected_theme_SVGID_ { stroke:gray; }\n","type":"single","only_shiny":true,"selected":[]},"toolbar":{"position":"topright","saveaspng":true},"sizing":{"rescale":true,"width":1}}},"evals":[],"jsHooks":[]}</script>
+
+---
+
+## Att spara din graf
+
+Det enklaste är via `ggsave()` 
+
+
+```r
+ggsave(filename = "median-price-over-time.png", plot = p, width = 10, height = 8)
+```
+
+---
+
+## Exportera till powerpoint
+
+- Paketet `officer` gör att du kan skapa powerpoints med teman direkt från R 
+- Du behöver bara en presentation som template
+
+
+```r
+library(officer)
+
+ppt &lt;- read_pptx("ferro_temp.pptx")
+
+ppt &lt;- ppt %&gt;% 
+  add_slide(layout = "Start A - white text", master = "Ferrologic 1.04") %&gt;% 
+  ph_with(value = "Min coola presentation", location = ph_location_type(type = "ftr")) %&gt;% 
+  add_slide(layout = "Content G", master = "Ferrologic 1.04") %&gt;% 
+  ph_with(value = "Min coola plot", location = ph_location_type(type = "title")) %&gt;% 
+  ph_with(value = p, location = ph_location_type(type = "body"))
+
+print(ppt, target = "fppt_example.pptx") 
+```
+
+
+---
+
+![](ppt-ex.png)
+
+---
+
+## Extensions
+
+- Det finns ett flertal extensions till ggplot 
+- Gå in och kolla på några på https://www.ggplot2-exts.org/
+
+---
+
+## Shiny
+
+- Ett ramverk för att bygga skräddarsydda applikationer i R 
+- Har likheter med traditionella BI-verktyg men är Open Source och därmed kostnadsfritt
+- Är mycket mer flexibelt än ett traditionellt BI-verktyg - allt du kan göra i HTML kan du göra i Shiny.
+- Ett otroligt kraftig verktyg för en Data Scientist
+- Innebär att vi kan paketera analyser som applikationer som användare kan agera med 
+- Exempelvis ta fram en prognosmodell och låta användare testa att själva ändra paramterar i den, exempelvis vilken typ av säsongsbetoning
+
+---
+
+## Nu ska vi göra vår egen Shiny-app! 
+
+- Öppna `hem-shiny-app.Rmd`
+- Klicka på `knit`
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();</script>
+
+<script>
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

@@ -1,0 +1,194 @@
+---
+title: "Visualiseringsövningar"
+author: "Filip Wästberg"
+date: "1/7/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. Vi utgår från data som kommer från Hemnet!
+
+```{r}
+hem <- read_csv("hemnet/hemnet_data.csv") 
+
+hem
+```
+
+---
+
+2. Visualisera relationen mellan `list_price` och `final_price`.
+- Vad är dina `aestetics`?
+- Vilken `geom_` använder du?
+- Passar skalan?
+- Finns det någon passande statistic för att visuellt beskriva relationen?
+
+```{r eval=FALSE}
+ggplot(data, aes(x = x, y = y)) +
+  geom_... +
+  stat_...
+```
+
+Vi kan ändra tema med `theme_...`
+
+```{r}
+p <- ggplot(mtcars, aes(mpg, hp)) +
+  geom_point() +
+  labs(title = "Min titel",
+       x = "Min x-axel",
+       y = "Min y-axel", 
+       subtitle = "Min subtitle",
+       caption = "Källa: Min caption") +
+  theme_minimal()
+```
+
+3. Pimpa din plot
+
+- Addera de labels du vill ha, gör dem informativa 
+- Addera ett tema 
+- Ändra formateringen på y och x-axeln så att siffrorna blir mer lättlästa med `scale_y_continous(labels = comma)`
+
+```{r}
+library(scales)
+```
+
+4. Andra aestetics 
+
+- Utgå från din visualisering av relationen mellan utropspris och slutpris
+- Mappa vår aestetic `color` till en numerisk variabel, exempelvis `sq_m`, hur hanterar du outliers?
+
+```{r}
+
+```
+
+5. Diskreta aesthetics
+
+- Utgå från din visualisering av relationen mellan utropspris och slutpris
+- Mappa vår aestetic `color` till en kategorisk variabel
+
+```{r}
+
+```
+
+6. Fler aestetics 
+
+- Utgå från din visualisering av relationen mellan utropspris och slutpris
+- Förutom en mappning av color, mappa `size` till en numerisk variabel
+
+```{r}
+p <- ggplot(scb, aes(x = utflyttningar,
+                     y = inflyttningar,
+                     color = kommunindelning_sex,
+                     size = ...)) +
+  geom_point()
+```
+
+7. Övning: Visualisera försäljningspris 
+
+- Vilken geom använder du och varför?
+- Vilken skala använder du?
+
+```{r}
+
+```
+
+8. Övning: Visualisera fördelningen på pris per bostadstyp
+
+- Använd `coord_flip()` 
+- Snygga till y-axeln så att man tydligt ser siffrorna
+
+## Facets 
+
+9. Övning 
+
+- Visualisera fördelningen per bostadstyp med sub-plots istället
+- Hur hanterar du x-axeln? Finns det något sätt att göra den snyggare?
+- För att hantera långa labels i `facet_wrap()` kan du använda funktionen `labeller` och `label_wrap_gen(10)`.
+
+```{r eval=FALSE}
+ggplot(hem, aes(final_price)) +
+  geom_histogram() +
+  scale_x_log10() +
+  facet_wrap(~..., labeller = labeller(type = label_wrap_gen(10))))
+```
+
+
+## Barcharts på aggregerade tabeller
+
+Inte sällan har vi aggregerade tabeller som vi vill visualisera.
+
+```{r}
+gapminder <- gapminder::gapminder 
+
+gap_continent <- gapminder %>% 
+  group_by(continent) %>% 
+  summarise(mean_gdp_per_cap = mean(gdpPercap))
+
+gap_continent
+```
+
+10. Hur fördelar sig kvadratmeterpris per mäklare? 
+
+- Ta fram en aggregerad tabell med genomsnittligt kvadratmeterpris per bostadstyp
+
+- Vilken funktion använder du för att kalkylera genomsnitt? Ha fördelningen i åtanke
+
+- Visualisera med `geom_col()`
+
+```{r}
+
+```
+
+
+11. Sortera X-axlen
+
+- Ofta vill vi sortera X-axeln efter ett värde, exempelvis 
+- Då kan vi bara använda `reorder(x, X = sum)`
+
+```{r}
+
+```
+
+12. Tidsserier 
+
+Vi har någon form av tidsserie som vi vill visualisera. Oftast har vi då en tidskomponent, exempelvis dag eller månad. I vår hemnet-data har vi datum. 
+
+- Kalkylera genomsnittligt försäljningspris per dag och visualisera
+- Vilken geom använder du?
+- Vilken skala använder du?
+- Väv ihop `dplyr` med din `ggplot2`-kod
+
+13. Testa att göra dina grafer interaktiva eller att exportera dem till PowerPoint
+
+14. Kör en shiny-app, testa att byta ut grafer, eller manipulera 
+
+15. Gå på https://www.showmeshiny.com/ och hitta inspiration!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
