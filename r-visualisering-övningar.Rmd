@@ -12,7 +12,8 @@ knitr::opts_chunk$set(echo = TRUE)
 1. Vi utgår från data som kommer från Hemnet!
 
 ```{r}
-hem <- read_csv("hemnet/hemnet_data.csv") 
+library(...)
+hem <- read_csv("https://raw.githubusercontent.com/Ferrologic/ds-programmet-block6-distr/master/hemnet/hemnet_data.csv") 
 
 hem
 ```
