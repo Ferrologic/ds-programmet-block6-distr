@@ -1,0 +1,153 @@
+---
+title: "Rmarkdown <3 Shiny"
+author: "Filip Wästberg"
+date: "3/9/2020"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+```
+
+## Leka med Shiny!
+
+Här nedan kan vi visa en interaktiv visualisering och låt läsaren interagera med data.
+
+```{r, echo=FALSE}
+if (!require("pacman")) install.packages("pacman")
+p_load(shiny)
+p_load(tidyverse)
+p_load(DT)
+p_load(broom)
+
+hem <- read_csv("hemnet/hemnet_data.csv") 
+
+shinyApp(
+  ui = fluidPage(
+    selectInput("type", "Type:",
+                choices = unique(hem$type)),
+    plotOutput("typeplot")
+  ),
+
+  server = function(input, output) {
+    output$typeplot = renderPlot({
+      ggplot(hem %>% 
+               filter(type == input$type),
+              aes(x = list_price, y = final_price)) +
+        geom_point(color = "orange", alpha = 0.5) +
+        scale_y_continuous(labels = scales::comma) +
+        scale_x_continuous(labels = scales::comma) +
+        theme_minimal() +
+        labs(
+          title = "Relation mellan utropspris och försäljningspris",
+          x = "Utropspris",
+          y = "Försäljningspris"
+        )
+      
+    })
+  },
+  options = list(height = 500)
+)
+```
+
+Vi kan även kolla tabeller.
+
+```{r}
+shinyApp(
+  ui = fluidPage(
+    selectInput("type", "Type:",
+                choices = unique(hem$type)),
+    DTOutput("typeplot")
+  ),
+
+  server = function(input, output) {
+    output$typeplot = renderDT({
+      hem %>% 
+               filter(type == input$type)
+    })
+  },
+  options = list(height = 500)
+)
+```
+
+Vi kan anpassa en modell och se hur den funkar på typer av bostäder.
+
+```{r}
+shinyApp(
+  ui = fluidPage(
+    selectInput("type", "Type:",
+                choices = unique(hem$type)),
+    DTOutput("typeplot")
+  ),
+
+  server = function(input, output) {
+    output$typeplot = renderDT({
+      model_data <- hem %>% filter(type == input$type)
+      
+      model <- lm(final_price ~ list_price, model_data)
+      
+      tidy(model)
+    })
+  },
+  options = list(height = 500)
+)
+```
+
+Hur preseterar modellen?
+
+```{r}
+shinyApp(
+  ui = fluidPage(
+    selectInput("type", "Type:",
+                choices = unique(hem$type)),
+    DTOutput("typeplot")
+  ),
+
+  server = function(input, output) {
+    output$typeplot = renderDT({
+      model_data <- hem %>% filter(type == input$type)
+      
+      model <- lm(final_price ~ list_price, model_data)
+      
+      glance(model)
+    })
+  },
+  options = list(height = 500)
+)
+```
+
+Du kan även styra det här med parametrar som man sätter i början.
+
+Kolla här för exempel på hur det kan gå till: https://rmarkdown.rstudio.com/developer_parameterized_reports.html%23parameter_types%2F
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
